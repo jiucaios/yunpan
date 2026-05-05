@@ -1,12 +1,13 @@
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const { isVercel } = require("../lib/env-utils");
 
 let dataDir = path.join(os.tmpdir(), "yunpan-data");
 let imagesDbPath = path.join(dataDir, "images.json");
 
 try {
-  if (process.env.VERCEL) {
+  if (isVercel()) {
     dataDir = path.join(os.tmpdir(), "yunpan-data");
     imagesDbPath = path.join(dataDir, "images.json");
   } else {
