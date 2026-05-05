@@ -1,6 +1,7 @@
 const path = require("path");
 const express = require("express");
 const multer = require("multer");
+const os = require("os");
 
 const { uploadsDir } = require("../config/uploads");
 const {
@@ -18,9 +19,15 @@ function createMulter() {
     return multer({ storage: multer.memoryStorage() });
   }
   
+  const effectiveUploadsDir = uploadsDir || path.join(os.tmpdir(), "yunpan-fallback-uploads");
+  
+  if (!require("fs").existsSync(effectiveUploadsDir)) {
+    require("fs").mkdirSync(effectiveUploadsDir, { recursive: true });
+  }
+  
   const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-      cb(null, uploadsDir);
+      cb(null, effectiveUploadsDir);
     },
     filename: (req, file, cb) => {
       const ext = path.extname(file.originalname) || "";
