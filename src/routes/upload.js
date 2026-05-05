@@ -1,6 +1,7 @@
 const path = require("path");
 const express = require("express");
 const multer = require("multer");
+const os = require("os");
 
 const { uploadsDir } = require("../config/uploads");
 const {
@@ -13,33 +14,48 @@ const { generateImageEmbedding } = require("../lib/vector-service");
 
 const router = express.Router();
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadsDir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname) || "";
-    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-    cb(null, uniqueName);
+function isVercel() {
+  return process.env.VERCEL === "1" || process.env.VERCEL === "true" || !!process.env.VERCEL;
+}
+
+function createMulter() {
+  if (isVercel()) {
+    return multer({ storage: multer.memoryStorage() });
   }
-});
-
-const fileFilter = (req, file, cb) => {
-  if (file.mimetype && file.mimetype.startsWith("image/")) {
-    cb(null, true);
-    return;
+  
+  const effectiveUploadsDir = uploadsDir || path.join(os.tmpdir(), "yunpan-fallback-uploads");
+  
+  if (!require("fs").existsSync(effectiveUploadsDir)) {
+    require("fs").mkdirSync(effectiveUploadsDir, { recursive: true });
   }
+  
+  const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, effectiveUploadsDir);
+    },
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname) || "";
+      const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+      cb(null, uniqueName);
+    }
+  });
+  
+  return multer({ 
+    storage,
+    fileFilter: (req, file, cb) => {
+      if (file.mimetype && file.mimetype.startsWith("image/")) {
+        cb(null, true);
+        return;
+      }
+      cb(new Error("Only image files are allowed."));
+    }
+  });
+}
 
-  cb(new Error("Only image files are allowed."));
-};
+const upload = createMulter();
 
-const upload = multer({
-  storage,
-  fileFilter
-});
-
-const handleUpload = (req, res) => {
-  upload.single("image")(req, res, (err) => {
+const handleUpload = async (req, res) => {
+  upload.single("image")(req, res, async (err) => {
     if (err) {
       res.status(400).json({
         success: false,
@@ -56,7 +72,44 @@ const handleUpload = (req, res) => {
       return;
     }
 
-    const imageRecord = createImageRecord(req.file);
+    let imageUrl, fileName;
+
+    if (isVercel()) {
+      try {
+        const { put } = await import("@vercel/blob");
+        const ext = path.extname(req.file.originalname) || ".png";
+        fileName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+        
+        const options = {
+          access: "public"
+        };
+        
+        if (process.env.BLOB_READ_WRITE_TOKEN) {
+          options.token = process.env.BLOB_READ_WRITE_TOKEN;
+        }
+        
+        const result = await put(fileName, req.file.buffer, options);
+        imageUrl = result.url;
+      } catch (blobError) {
+        console.error("Blob upload error:", blobError);
+        res.status(500).json({
+          success: false,
+          message: `Failed to upload to Blob: ${blobError.message}`
+        });
+        return;
+      }
+    } else {
+      fileName = req.file.filename;
+      imageUrl = `/uploads/${fileName}`;
+    }
+
+    const imageRecord = createImageRecord({
+      filename: fileName,
+      originalname: req.file.originalname,
+      path: imageUrl,
+      size: req.file.size,
+      mimetype: req.file.mimetype
+    });
 
     generateImageEmbedding(imageRecord)
       .then((result) => {
