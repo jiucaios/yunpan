@@ -57,6 +57,8 @@ function renderGallery(keyword) {
   gallery.innerHTML = "";
   imageCount.textContent = String(images.length);
 
+  console.log("Rendering gallery with images:", images);
+
   if (!allImages.length) {
     galleryHint.textContent = "暂无图片。请上传一张图片开始。";
     return;
@@ -79,12 +81,19 @@ function renderGallery(keyword) {
     const deleteBtn = card.querySelector(".delete-btn");
     const link = card.querySelector(".image-link");
 
+    console.log("Image path:", image.path);
+    
     img.src = image.path;
-    img.alt = image.name;
-    name.textContent = image.name;
+    img.alt = image.name || "未命名图片";
+    img.onerror = () => {
+      console.error("图片加载失败，URL:", image.path);
+      img.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Crect fill='%23f0f0f0' width='200' height='200'/%3E%3Ctext x='100' y='100' text-anchor='middle' dy='.3em' fill='%23999' font-family='sans-serif' font-size='14'%3E图片加载失败%3C/text%3E%3C/svg%3E";
+    };
+    name.textContent = image.originalName || image.name || "未命名";
     time.textContent = `上传时间: ${formatTime(image.uploadedAt)}`;
-    vectorStatus.textContent = image.vectorStatus;
+    vectorStatus.textContent = image.vectorStatus || "未知";
     link.href = image.path;
+    link.textContent = "打开图片";
 
     if (!vectorConfigured) {
       vectorizeBtn.disabled = true;
@@ -158,7 +167,8 @@ async function loadImages() {
   try {
     serviceStatus.textContent = "在线";
     const result = await requestJson("/api/images");
-    allImages = result.images;
+    console.log("API返回的图片数据:", result);
+    allImages = result.images || [];
     
     const hasEmbedding = allImages.some((image) => image.hasEmbedding);
     vectorStatus.textContent = vectorConfigured ? (hasEmbedding ? "已配置" : "已配置") : "预留";
@@ -168,6 +178,7 @@ async function loadImages() {
     serviceStatus.textContent = "离线";
     gallery.innerHTML = "";
     galleryHint.textContent = error.message || "加载图片失败。";
+    console.error("加载图片失败:", error);
   }
 }
 
@@ -205,6 +216,7 @@ uploadForm.addEventListener("submit", async (event) => {
 
   try {
     const result = await uploadImage(file);
+    console.log("上传结果:", result);
     setMessage(
       `上传成功: ${result.path}。向量钩子状态: ${result.vector.status}。`,
       "success"
@@ -214,6 +226,7 @@ uploadForm.addEventListener("submit", async (event) => {
     await loadImages();
   } catch (error) {
     setMessage(error.message || "上传失败。", "error");
+    console.error("上传失败:", error);
   } finally {
     submitButton.disabled = false;
     submitButton.textContent = "上传图片";
@@ -273,8 +286,8 @@ semanticSearchButton.addEventListener("click", async () => {
       const link = card.querySelector(".image-link");
 
       img.src = image.path;
-      img.alt = image.name;
-      name.textContent = image.name;
+      img.alt = image.name || "未命名图片";
+      name.textContent = image.originalName || image.name || "未命名";
       time.textContent = `上传时间: ${formatTime(image.uploadedAt)}`;
       vStatus.textContent = image.vectorStatus;
       link.href = image.path;
