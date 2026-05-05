@@ -13,11 +13,11 @@ const { generateImageEmbedding } = require("../lib/vector-service");
 
 const router = express.Router();
 
-let upload;
-
-if (process.env.VERCEL) {
-  upload = multer({ storage: multer.memoryStorage() });
-} else {
+function createMulter() {
+  if (process.env.VERCEL) {
+    return multer({ storage: multer.memoryStorage() });
+  }
+  
   const storage = multer.diskStorage({
     destination: (req, file, cb) => {
       cb(null, uploadsDir);
@@ -28,22 +28,20 @@ if (process.env.VERCEL) {
       cb(null, uniqueName);
     }
   });
-  upload = multer({ storage });
+  
+  return multer({ 
+    storage,
+    fileFilter: (req, file, cb) => {
+      if (file.mimetype && file.mimetype.startsWith("image/")) {
+        cb(null, true);
+        return;
+      }
+      cb(new Error("Only image files are allowed."));
+    }
+  });
 }
 
-const fileFilter = (req, file, cb) => {
-  if (file.mimetype && file.mimetype.startsWith("image/")) {
-    cb(null, true);
-    return;
-  }
-
-  cb(new Error("Only image files are allowed."));
-};
-
-upload = multer({
-  storage: upload.storage,
-  fileFilter
-});
+const upload = createMulter();
 
 const handleUpload = async (req, res) => {
   upload.single("image")(req, res, async (err) => {
@@ -63,23 +61,23 @@ const handleUpload = async (req, res) => {
       return;
     }
 
-    let imagePath, imageUrl;
-    
+    let imageUrl, fileName;
+
     if (process.env.VERCEL) {
       const { put } = await import("@vercel/blob");
-      const fileName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(req.file.originalname)}`;
+      const ext = path.extname(req.file.originalname) || ".png";
+      fileName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
       const result = await put(fileName, req.file.buffer, {
         access: "public"
       });
       imageUrl = result.url;
-      imagePath = result.url;
     } else {
-      imageUrl = `/uploads/${req.file.filename}`;
-      imagePath = `/uploads/${req.file.filename}`;
+      fileName = req.file.filename;
+      imageUrl = `/uploads/${fileName}`;
     }
 
     const imageRecord = createImageRecord({
-      filename: req.file.filename || path.basename(imageUrl),
+      filename: fileName,
       originalname: req.file.originalname,
       path: imageUrl,
       size: req.file.size,
