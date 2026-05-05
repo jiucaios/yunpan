@@ -1,0 +1,25 @@
+{
+  "name": "yunpan-demo",
+  "version": "1.0.0",
+  "description": "Single-user image cloud demo with Express and Multer",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "multer": "^1.4.5-lts.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "image-cloud",
+    "vector-search",
+    "express",
+    "vercel"
+  ],
+  "author": "",
+  "license": "MIT"
+}

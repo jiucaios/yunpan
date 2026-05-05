@@ -1,0 +1,6 @@
+{
+  "bailianApiKey": "YOUR_API_KEY_HERE",
+  "bailianVectorModel": "qwen3-vl-embedding",
+  "bailianQueryRewriteModel": "qwen3.5-flash",
+  "bailianVectorDimension": 1024
+}
