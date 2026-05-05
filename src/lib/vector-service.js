@@ -60,7 +60,15 @@ function getImageMimeSubtype(imagePath, mimeType) {
   return ext || "png";
 }
 
-function toDataUri(imageRecord) {
+async function toDataUri(imageRecord) {
+  if (imageRecord.path.startsWith("https://")) {
+    const response = await fetch(imageRecord.path);
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const subtype = getImageMimeSubtype(imageRecord.path, imageRecord.mimeType);
+    return `data:image/${subtype};base64,${buffer.toString("base64")}`;
+  }
+
   const localPath = path.join(__dirname, "..", "..", imageRecord.path.replace(/^\//, ""));
   const fileBuffer = fs.readFileSync(localPath);
   const subtype = getImageMimeSubtype(localPath, imageRecord.mimeType);
@@ -175,7 +183,7 @@ async function rewriteQueryWithLlm(query) {
 
 async function generateImageEmbedding(imageRecord) {
   try {
-    return await requestEmbedding([{ image: toDataUri(imageRecord) }]);
+    return await requestEmbedding([{ image: await toDataUri(imageRecord) }]);
   } catch (error) {
     return {
       configured: isVectorProviderConfigured(),
@@ -244,7 +252,7 @@ async function searchByText(query, imageRecords) {
         image
       }))
       .sort((a, b) => b.score - a.score)
-      .filter((item) => item.score > 0.3); // 添加相似度阈值过滤，只保留相似度大于0.3的结果
+      .filter((item) => item.score > 0.3);
 
     return {
       configured: true,
