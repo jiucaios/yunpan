@@ -12,7 +12,10 @@ const publicDir = path.join(__dirname, "..", "public");
 
 app.use(express.json());
 app.use(express.static(publicDir));
-app.use("/uploads", express.static(uploadsDir));
+
+if (!process.env.VERCEL) {
+  app.use("/uploads", express.static(uploadsDir));
+}
 
 app.get("/health", (req, res) => {
   res.json({
