@@ -6,6 +6,7 @@ const searchRouter = require("./routes/search");
 const uploadRouter = require("./routes/upload");
 const vectorRouter = require("./routes/vector");
 const { uploadsDir } = require("./config/uploads");
+const { isVectorProviderConfigured } = require("./lib/vector-service");
 
 const app = express();
 const publicDir = path.join(__dirname, "..", "public");
@@ -20,6 +21,14 @@ if (!process.env.VERCEL) {
 app.get("/health", (req, res) => {
   res.json({
     success: true
+  });
+});
+
+app.get("/api/config", (req, res) => {
+  res.json({
+    success: true,
+    configured: isVectorProviderConfigured(),
+    vercel: !!process.env.VERCEL
   });
 });
 
