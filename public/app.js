@@ -15,6 +15,7 @@ const semanticSearchButton = document.querySelector("#semanticSearchButton");
 const semanticMessage = document.querySelector("#semanticMessage");
 
 let allImages = [];
+let vectorConfigured = false;
 
 async function requestJson(url, options) {
   const response = await fetch(url, options);
@@ -75,6 +76,7 @@ function renderGallery(keyword) {
     const time = card.querySelector(".image-time");
     const vectorStatus = card.querySelector(".vector-status-value");
     const vectorizeBtn = card.querySelector(".vectorize-btn");
+    const deleteBtn = card.querySelector(".delete-btn");
     const link = card.querySelector(".image-link");
 
     img.src = image.path;
@@ -84,27 +86,31 @@ function renderGallery(keyword) {
     vectorStatus.textContent = image.vectorStatus;
     link.href = image.path;
 
-    vectorizeBtn.addEventListener("click", async () => {
+    if (!vectorConfigured) {
       vectorizeBtn.disabled = true;
-      vectorizeBtn.textContent = "矢量化中...";
-      vectorStatus.textContent = "processing";
+      vectorizeBtn.title = "向量服务未配置";
+    } else {
+      vectorizeBtn.addEventListener("click", async () => {
+        vectorizeBtn.disabled = true;
+        vectorizeBtn.textContent = "矢量化中...";
+        vectorStatus.textContent = "processing";
 
-      try {
-        const result = await requestJson(`/api/vector/reprocess/${image.id}`, {
-          method: "POST"
-        });
-        vectorStatus.textContent = result.vector.status;
-        await loadImages();
-      } catch (error) {
-        vectorStatus.textContent = "failed";
-        console.error("重新矢量化失败:", error);
-      } finally {
-        vectorizeBtn.disabled = false;
-        vectorizeBtn.textContent = "重新矢量化";
-      }
-    });
+        try {
+          const result = await requestJson(`/api/vector/reprocess/${image.id}`, {
+            method: "POST"
+          });
+          vectorStatus.textContent = result.vector.status;
+          await loadImages();
+        } catch (error) {
+          vectorStatus.textContent = "failed";
+          console.error("重新矢量化失败:", error);
+        } finally {
+          vectorizeBtn.disabled = false;
+          vectorizeBtn.textContent = "重新矢量化";
+        }
+      });
+    }
 
-    const deleteBtn = card.querySelector(".delete-btn");
     deleteBtn.addEventListener("click", async () => {
       if (!confirm("确定要删除这张图片吗？")) {
         return;
@@ -130,12 +136,33 @@ function renderGallery(keyword) {
   });
 }
 
+async function checkVectorConfig() {
+  try {
+    const result = await requestJson("/api/config");
+    vectorConfigured = result.configured;
+    vectorStatus.textContent = vectorConfigured ? "已配置" : "预留";
+    
+    if (vectorConfigured) {
+      setSemanticMessage("向量搜索API已配置，可以使用语义搜索功能。", "success");
+    } else {
+      setSemanticMessage("向量搜索API已预留。请在后端钩子中插入Doubao模型。", "muted");
+    }
+  } catch (error) {
+    console.error("检查向量配置失败:", error);
+    vectorConfigured = false;
+    vectorStatus.textContent = "未知";
+  }
+}
+
 async function loadImages() {
   try {
     serviceStatus.textContent = "在线";
     const result = await requestJson("/api/images");
     allImages = result.images;
-    vectorStatus.textContent = allImages.some((image) => image.hasEmbedding) ? "部分" : "预留";
+    
+    const hasEmbedding = allImages.some((image) => image.hasEmbedding);
+    vectorStatus.textContent = vectorConfigured ? (hasEmbedding ? "已配置" : "已配置") : "预留";
+    
     renderGallery(searchInput.value);
   } catch (error) {
     serviceStatus.textContent = "离线";
@@ -156,7 +183,7 @@ async function uploadImage(file) {
 
 imageInput.addEventListener("change", () => {
   const file = imageInput.files[0];
-  selectedFile.textContent = file ? `Selected: ${file.name}` : "No file selected";
+  selectedFile.textContent = file ? `已选择: ${file.name}` : "未选择文件";
 });
 
 searchInput.addEventListener("input", () => {
@@ -201,9 +228,14 @@ semanticSearchButton.addEventListener("click", async () => {
     return;
   }
 
+  if (!vectorConfigured) {
+    setSemanticMessage("向量搜索服务未配置，请先配置BAILIAN_API_KEY环境变量。", "error");
+    return;
+  }
+
   semanticSearchButton.disabled = true;
   semanticSearchButton.textContent = "搜索中...";
-  setSemanticMessage("调用预留的向量搜索API...", "muted");
+  setSemanticMessage("调用向量搜索API...", "muted");
 
   try {
     const result = await requestJson("/api/search", {
@@ -222,67 +254,58 @@ semanticSearchButton.addEventListener("click", async () => {
       return;
     }
 
-    // 清空画廊，确保只显示匹配的图片
     gallery.innerHTML = "";
     
-    // 提取匹配的图片ID并过滤
     const resultIds = new Set(result.results.map((item) => item.imageId));
     const matchedImages = allImages.filter((image) => resultIds.has(image.id));
     
-    // 更新计数和提示信息
     imageCount.textContent = String(matchedImages.length);
     galleryHint.textContent = `语义搜索返回 ${matchedImages.length} 张图片`;
     
-    // 显示匹配的图片
     matchedImages.forEach((image) => {
       const card = imageCardTemplate.content.firstElementChild.cloneNode(true);
       const img = card.querySelector("img");
       const name = card.querySelector(".image-name");
       const time = card.querySelector(".image-time");
-      const vectorStatus = card.querySelector(".vector-status-value");
+      const vStatus = card.querySelector(".vector-status-value");
       const vectorizeBtn = card.querySelector(".vectorize-btn");
+      const deleteBtn = card.querySelector(".delete-btn");
       const link = card.querySelector(".image-link");
 
       img.src = image.path;
       img.alt = image.name;
       name.textContent = image.name;
       time.textContent = `上传时间: ${formatTime(image.uploadedAt)}`;
-      vectorStatus.textContent = image.vectorStatus;
+      vStatus.textContent = image.vectorStatus;
       link.href = image.path;
 
       vectorizeBtn.addEventListener("click", async () => {
         vectorizeBtn.disabled = true;
         vectorizeBtn.textContent = "矢量化中...";
-        vectorStatus.textContent = "processing";
+        vStatus.textContent = "processing";
 
         try {
-          const result = await requestJson(`/api/vector/reprocess/${image.id}`, {
+          const res = await requestJson(`/api/vector/reprocess/${image.id}`, {
             method: "POST"
           });
-          vectorStatus.textContent = result.vector.status;
+          vStatus.textContent = res.vector.status;
           await loadImages();
         } catch (error) {
-          vectorStatus.textContent = "failed";
-          console.error("重新矢量化失败:", error);
+          vStatus.textContent = "failed";
         } finally {
           vectorizeBtn.disabled = false;
           vectorizeBtn.textContent = "重新矢量化";
         }
       });
 
-      const deleteBtn = card.querySelector(".delete-btn");
       deleteBtn.addEventListener("click", async () => {
-        if (!confirm("确定要删除这张图片吗？")) {
-          return;
-        }
-
+        if (!confirm("确定要删除这张图片吗？")) return;
+        
         deleteBtn.disabled = true;
         deleteBtn.textContent = "删除中...";
 
         try {
-          await requestJson(`/api/images/${image.id}`, {
-            method: "DELETE"
-          });
+          await requestJson(`/api/images/${image.id}`, { method: "DELETE" });
           await loadImages();
         } catch (error) {
           console.error("删除失败:", error);
@@ -302,7 +325,6 @@ semanticSearchButton.addEventListener("click", async () => {
     setSemanticMessage(summaryMessage, "success");
   } catch (error) {
     setSemanticMessage(error.message || "语义搜索失败。", "error");
-    // 发生错误时也清空画廊
     gallery.innerHTML = "";
     imageCount.textContent = "0";
     galleryHint.textContent = "搜索失败，请重试。";
@@ -312,4 +334,9 @@ semanticSearchButton.addEventListener("click", async () => {
   }
 });
 
-loadImages();
+async function init() {
+  await checkVectorConfig();
+  await loadImages();
+}
+
+init();
