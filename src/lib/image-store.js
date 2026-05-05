@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { isVercel } = require("./env-utils");
 
 const { imagesDbPath } = require("../config/data");
 const { uploadsDir } = require("../config/uploads");
@@ -155,7 +156,7 @@ function markImageVectorStatus(id, payload) {
 }
 
 async function syncUploadsToDb() {
-  if (process.env.VERCEL) {
+  if (isVercel()) {
     return;
   }
   
@@ -214,7 +215,7 @@ async function deleteImage(id) {
   db.images = db.images.filter((img) => img.id !== id);
   writeDb(db);
 
-  if (process.env.VERCEL && image.path.startsWith("https://")) {
+  if (isVercel() && image.path.startsWith("https://")) {
     try {
       const { del } = await import("@vercel/blob");
       const options = {};
