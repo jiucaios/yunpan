@@ -75,7 +75,7 @@ function createImageRecord(file) {
     id,
     name: file.filename,
     originalName: file.originalname || file.filename,
-    path: `/uploads/${file.filename}`,
+    path: file.path || `/uploads/${file.filename}`,
     uploadedAt: new Date().toISOString(),
     size: file.size || 0,
     mimeType: file.mimetype || null,
@@ -129,6 +129,10 @@ function markImageVectorStatus(id, payload) {
 }
 
 async function syncUploadsToDb() {
+  if (process.env.VERCEL) {
+    return;
+  }
+  
   const db = readDb();
   const knownNames = new Set(db.images.map((image) => image.name));
   const entries = await fs.promises.readdir(uploadsDir, { withFileTypes: true });
@@ -178,14 +182,23 @@ async function deleteImage(id) {
   db.images = db.images.filter((img) => img.id !== id);
   writeDb(db);
 
-  // Remove from file system
-  try {
-    const filePath = path.join(uploadsDir, image.name);
-    if (fs.existsSync(filePath)) {
-      await fs.promises.unlink(filePath);
+  // Remove from storage
+  if (process.env.VERCEL && image.path.startsWith("https://")) {
+    try {
+      const { del } = await import("@vercel/blob");
+      await del(image.path);
+    } catch (error) {
+      console.error("Error deleting from Blob:", error);
     }
-  } catch (error) {
-    console.error("Error deleting file:", error);
+  } else {
+    try {
+      const filePath = path.join(uploadsDir, image.name);
+      if (fs.existsSync(filePath)) {
+        await fs.promises.unlink(filePath);
+      }
+    } catch (error) {
+      console.error("Error deleting file:", error);
+    }
   }
 
   return true;
