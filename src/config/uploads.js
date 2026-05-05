@@ -64,13 +64,29 @@ const handleUpload = async (req, res) => {
     let imageUrl, fileName;
 
     if (process.env.VERCEL) {
-      const { put } = await import("@vercel/blob");
-      const ext = path.extname(req.file.originalname) || ".png";
-      fileName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-      const result = await put(fileName, req.file.buffer, {
-        access: "public"
-      });
-      imageUrl = result.url;
+      try {
+        const { put } = await import("@vercel/blob");
+        const ext = path.extname(req.file.originalname) || ".png";
+        fileName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+        
+        const options = {
+          access: "public"
+        };
+        
+        if (process.env.BLOB_READ_WRITE_TOKEN) {
+          options.token = process.env.BLOB_READ_WRITE_TOKEN;
+        }
+        
+        const result = await put(fileName, req.file.buffer, options);
+        imageUrl = result.url;
+      } catch (blobError) {
+        console.error("Blob upload error:", blobError);
+        res.status(500).json({
+          success: false,
+          message: `Failed to upload to Blob: ${blobError.message}`
+        });
+        return;
+      }
     } else {
       fileName = req.file.filename;
       imageUrl = `/uploads/${fileName}`;
