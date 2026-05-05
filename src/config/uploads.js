@@ -1,11 +1,12 @@
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const { isVercel } = require("../lib/env-utils");
 
 let uploadsDir = path.join(os.tmpdir(), "yunpan-uploads");
 
 try {
-  if (process.env.VERCEL) {
+  if (isVercel()) {
     uploadsDir = path.join(os.tmpdir(), "yunpan-uploads");
   } else {
     uploadsDir = path.join(__dirname, "..", "..", "uploads");
