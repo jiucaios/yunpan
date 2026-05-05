@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Yunpan Demo</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">云盘演示</p>
+          <h1>图像矢量化</h1>
+          <p class="hero-text">
+            上传图片并跟踪其矢量化状态。矢量化完成后支持语义搜索。
+          </p>
+        </div>
+        <div class="hero-stats">
+          <div class="stat-card">
+            <span class="stat-label">图片</span>
+            <strong id="imageCount">0</strong>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">服务</span>
+            <strong id="serviceStatus">在线</strong>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">向量搜索</span>
+            <strong id="vectorStatus">预留</strong>
+          </div>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="panel upload-panel">
+          <div class="panel-header">
+            <h2>上传</h2>
+            <p>选择一张图片并上传到本地云文件夹。</p>
+          </div>
+
+          <form id="uploadForm" class="upload-form">
+            <label class="upload-dropzone" for="imageInput">
+              <input id="imageInput" name="image" type="file" accept="image/*" required />
+              <span class="drop-title">选择图片</span>
+              <span class="drop-subtitle">目前仅支持单张图片上传</span>
+            </label>
+
+            <div id="selectedFile" class="selected-file">未选择文件</div>
+
+            <button id="submitButton" type="submit" class="primary-button">上传图片</button>
+          </form>
+
+          <div id="uploadMessage" class="message-card muted">
+            上传结果将显示在这里。
+          </div>
+        </section>
+
+        <section class="panel library-panel">
+          <div class="panel-header library-header">
+            <div>
+              <h2>图库</h2>
+              <p>文件列表及预留的向量检索语义搜索区域。</p>
+            </div>
+            <div class="search-box">
+              <input id="searchInput" type="search" placeholder="按文件名筛选" />
+            </div>
+          </div>
+
+          <div class="semantic-search">
+            <div class="semantic-search-copy">
+              <h3>语义搜索</h3>
+              <p>预留此区域用于对保存的产品图片进行文本到向量的搜索。</p>
+            </div>
+            <div class="semantic-search-form">
+              <input id="semanticQuery" type="search" placeholder="尝试：白色运动鞋，咖啡杯，台灯" />
+              <button id="semanticSearchButton" type="button" class="secondary-button">按含义搜索</button>
+            </div>
+            <div id="semanticMessage" class="message-card muted">
+              向量搜索API已预留。请在后端钩子中插入Doubao模型。
+            </div>
+          </div>
+
+          <div id="galleryHint" class="gallery-hint">加载图片中...</div>
+          <section id="gallery" class="gallery"></section>
+        </section>
+      </main>
+    </div>
+
+    <template id="imageCardTemplate">
+      <article class="image-card">
+        <div class="image-frame">
+          <img alt="" loading="lazy" />
+        </div>
+        <div class="image-meta">
+          <h3 class="image-name"></h3>
+          <p class="image-time"></p>
+          <div class="vector-status">
+            <span class="vector-status-label">矢量化状态:</span>
+            <span class="vector-status-value"></span>
+          </div>
+          <div class="vector-actions">
+            <button class="vectorize-btn secondary-button">重新矢量化</button>
+            <button class="delete-btn secondary-button">删除</button>
+          </div>
+          <a class="image-link" target="_blank" rel="noreferrer">打开图片</a>
+        </div>
+      </article>
+    </template>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
