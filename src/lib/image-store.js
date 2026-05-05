@@ -6,17 +6,43 @@ const { uploadsDir } = require("../config/uploads");
 
 const imageExtensions = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"]);
 
-function readDb() {
-  const raw = fs.readFileSync(imagesDbPath, "utf8");
-  const parsed = JSON.parse(raw || '{"images":[]}');
+function validatePath(dbPath) {
+  if (!dbPath || typeof dbPath !== "string") {
+    const fallbackPath = path.join(require("os").tmpdir(), "yunpan-fallback", "images.json");
+    console.warn(`Invalid database path: ${dbPath}, using fallback: ${fallbackPath}`);
+    return fallbackPath;
+  }
+  return dbPath;
+}
 
-  return {
-    images: Array.isArray(parsed.images) ? parsed.images : []
-  };
+function readDb() {
+  const dbPath = validatePath(imagesDbPath);
+  
+  try {
+    const raw = fs.readFileSync(dbPath, "utf8");
+    const parsed = JSON.parse(raw || '{"images":[]}');
+    return {
+      images: Array.isArray(parsed.images) ? parsed.images : []
+    };
+  } catch (error) {
+    console.error("Error reading database:", error);
+    return { images: [] };
+  }
 }
 
 function writeDb(db) {
-  fs.writeFileSync(imagesDbPath, JSON.stringify(db, null, 2));
+  const dbPath = validatePath(imagesDbPath);
+  
+  try {
+    const dir = path.dirname(dbPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(dbPath, JSON.stringify(db, null, 2));
+  } catch (error) {
+    console.error("Error writing database:", error);
+    throw error;
+  }
 }
 
 function toPublicImageRecord(record) {
@@ -135,39 +161,46 @@ async function syncUploadsToDb() {
   
   const db = readDb();
   const knownNames = new Set(db.images.map((image) => image.name));
-  const entries = await fs.promises.readdir(uploadsDir, { withFileTypes: true });
+  
+  const effectiveUploadsDir = uploadsDir || path.join(require("os").tmpdir(), "yunpan-uploads");
+  
+  try {
+    const entries = await fs.promises.readdir(effectiveUploadsDir, { withFileTypes: true });
 
-  for (const entry of entries) {
-    if (!entry.isFile()) {
-      continue;
+    for (const entry of entries) {
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      const ext = path.extname(entry.name).toLowerCase();
+      if (!imageExtensions.has(ext) || knownNames.has(entry.name)) {
+        continue;
+      }
+
+      const absolutePath = path.join(effectiveUploadsDir, entry.name);
+      const stats = await fs.promises.stat(absolutePath);
+
+      db.images.push({
+        id: `img_${Date.now()}_${Math.round(Math.random() * 1e6)}`,
+        name: entry.name,
+        originalName: entry.name,
+        path: `/uploads/${entry.name}`,
+        uploadedAt: stats.birthtime.toISOString(),
+        size: stats.size,
+        mimeType: null,
+        vectorStatus: "pending",
+        embedding: null,
+        embeddingModel: null,
+        embeddingUpdatedAt: null,
+        vectorError: null
+      });
     }
 
-    const ext = path.extname(entry.name).toLowerCase();
-    if (!imageExtensions.has(ext) || knownNames.has(entry.name)) {
-      continue;
-    }
-
-    const absolutePath = path.join(uploadsDir, entry.name);
-    const stats = await fs.promises.stat(absolutePath);
-
-    db.images.push({
-      id: `img_${Date.now()}_${Math.round(Math.random() * 1e6)}`,
-      name: entry.name,
-      originalName: entry.name,
-      path: `/uploads/${entry.name}`,
-      uploadedAt: stats.birthtime.toISOString(),
-      size: stats.size,
-      mimeType: null,
-      vectorStatus: "pending",
-      embedding: null,
-      embeddingModel: null,
-      embeddingUpdatedAt: null,
-      vectorError: null
-    });
+    db.images = sortImages(db.images);
+    writeDb(db);
+  } catch (error) {
+    console.error("Error syncing uploads:", error);
   }
-
-  db.images = sortImages(db.images);
-  writeDb(db);
 }
 
 async function deleteImage(id) {
@@ -184,13 +217,18 @@ async function deleteImage(id) {
   if (process.env.VERCEL && image.path.startsWith("https://")) {
     try {
       const { del } = await import("@vercel/blob");
-      await del(image.path);
+      const options = {};
+      if (process.env.BLOB_READ_WRITE_TOKEN) {
+        options.token = process.env.BLOB_READ_WRITE_TOKEN;
+      }
+      await del(image.path, options);
     } catch (error) {
       console.error("Error deleting from Blob:", error);
     }
   } else {
+    const effectiveUploadsDir = uploadsDir || path.join(require("os").tmpdir(), "yunpan-uploads");
     try {
-      const filePath = path.join(uploadsDir, image.name);
+      const filePath = path.join(effectiveUploadsDir, image.name);
       if (fs.existsSync(filePath)) {
         await fs.promises.unlink(filePath);
       }
